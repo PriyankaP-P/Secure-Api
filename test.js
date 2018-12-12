@@ -22,16 +22,16 @@
 //   issuer: "Cloudgiant enterprises"
 // });
 // console.log(r);
-const speakeasy = require("speakeasy");
-const QRCode = require("qrcode");
+// const speakeasy = require("speakeasy");
+// const QRCode = require("qrcode");
 
-let secret = speakeasy.generateSecret({ length: 20 });
+// let secret = speakeasy.generateSecret({ length: 20 });
 
-console.log(secret.base32);
+// console.log(secret.base32);
 
-QRCode.toDataURL(secret.otpauth_url, function(err, image_data) {
-  console.log(image_data);
-});
+// QRCode.toDataURL(secret.otpauth_url, function(err, image_data) {
+//   console.log(image_data);
+// });
 
 // QRCode.toFile(
 //   "./qrcode.png",
@@ -51,3 +51,9 @@ QRCode.toDataURL(secret.otpauth_url, function(err, image_data) {
 //   if (err) throw err;
 //   console.log(string);
 // });
+const knex = require("./knex");
+knex("users")
+  .where("id", "dcdbbb3e-9909-4e1a-8104-45768f282f5c")
+  .update("tfa_enabled", true)
+  .then(row => row)
+  .catch(err => err);

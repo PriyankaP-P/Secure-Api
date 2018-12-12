@@ -8,8 +8,8 @@ const keys = require("../../config/keys");
 const passport = require("passport");
 const knex = require("../../knex");
 const crypto = require("crypto");
-const speakeasy = require("speakeasy");
-const QRCode = require("qrcode");
+// const speakeasy = require("speakeasy");
+// const QRCode = require("qrcode");
 
 const loggedin = require("connect-ensure-login");
 const base32 = require("thirty-two");
@@ -278,37 +278,38 @@ function jwtLogin(req, res, next) {
       if (data.length) {
         bcrypt.compare(req.body.password, data[0].password).then(isMatch => {
           if (isMatch) {
-            const payload = { id: data[0].id }; //, registered: data[0].registered
+            // console.log(data[0]);
+            const payload = { id: data[0].id, registered: data[0].registered };
             jwt.sign(
               payload,
               keys.secretOrKey,
               { expiresIn: 3600 },
               (err, token) => {
-                knex
-                  .table("users")
-                  .where("email", "=", data[0].email)
-                  .select("tfa_enabled")
-                  .then(tfaEnabled => {
-                    // console.log(tfaEnabled[0].tfa_enabled);
-                    if (!tfaEnabled[0].tfa_enabled) {
-                      res.json({
-                        success: true,
-                        token: "Bearer " + token
-                      });
-                    } else {
-                      console.log("Tfa enabled");
-                      req.sendingToken = {
-                        id: data[0].id,
-                        token: "Bearer " + token
-                      };
-                      return next();
-                      // res.redirect("/verify2fa");
-                    }
-                  })
-                  .catch(err => {
-                    errors.invalid = "Invalid email/password";
-                    res.status(400).json(errors);
-                  });
+                // knex
+                //   .table("users")
+                //   .where("email", "=", data[0].email)
+                //   .select("tfa_enabled")
+                //   .then(tfaEnabled => {
+                //     // console.log(tfaEnabled[0].tfa_enabled);
+                //     if (!tfaEnabled[0].tfa_enabled) {
+                //       res.json({
+                //         success: true,
+                //         token: "Bearer " + token
+                //       });
+                //     } else {
+                //       console.log("Tfa enabled");
+                req.sendingToken = {
+                  id: data[0].id,
+                  token: "Bearer " + token
+                };
+                return next();
+                // // res.redirect("/verify2fa");
+                //   }
+                // })
+                // .catch(err => {
+                //   errors.invalid = "Invalid email/password";
+                //   res.status(400).json(errors);
+                // });
               }
             );
           } else {
@@ -484,19 +485,28 @@ function jwtLogin(req, res, next) {
 //   res.render("account", { user: req.user });
 // });
 
-router.get("/setup", loggedin.ensureLoggedIn(), function(req, res, next) {
+let authenticated = function(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+
+  return res.redirect("/");
+};
+
+//works without "loggedin.ensureLoggedIn(),"
+router.get("/setup", function(req, res, next) {
   const { errors, isValid } = validateEmail(req.body);
 
   if (!isValid) {
     return res.status(400).json(errors);
   }
 
-  knex // need user id and email to be pass into req
-    .table("users")
+  knex("users") // need user id and email to be pass into req
     .where("email", req.body.email)
     .select("key", "period")
     .then(obj => {
-      if (obj) {
+      console.log(obj[0].key);
+      if (obj[0].key !== null) {
         let encodedKey = base32.encode(obj[0].key);
         let otpUrl =
           "otpauth://totp/" +
@@ -517,7 +527,7 @@ router.get("/setup", loggedin.ensureLoggedIn(), function(req, res, next) {
       } else {
         let key = utils.randomKey(10);
         let encodedKey = base32.encode(key);
-
+        console.log(encodedKey);
         let otpUrl =
           "otpauth://totp/" +
           req.body.email +
@@ -530,9 +540,9 @@ router.get("/setup", loggedin.ensureLoggedIn(), function(req, res, next) {
 
         knex
           .table("users")
-          .where("id", req.body.id)
-          .update({ key: key, period: 30 })
-          .then(obj => {
+          .where("email", req.body.email)
+          .update({ key: key, period: 30, tfa_enabled: true })
+          .then(result => {
             res.json({
               user: req.body,
               key: encodedKey,
@@ -549,14 +559,11 @@ router.get("/setup", loggedin.ensureLoggedIn(), function(req, res, next) {
     });
 });
 
-// router.get("/login", function(req, res) {
-//   const { errors, isValid } = validateLoginInput(req.body);
+router.get("/login", jwtLogin, function(req, res) {
+  let errors = {};
 
-//   if (!isValid) {
-//     return res.status(400).json(errors);
-//   }
-//   res.json({ user: req.body, message: errors.message, error: errors });
-// });
+  res.json({ user: req.sendingToken, message: errors.message, error: errors });
+});
 
 // router.post(
 //   //passport.authenticate("jwt", { session: false }),
@@ -567,18 +574,55 @@ router.get("/setup", loggedin.ensureLoggedIn(), function(req, res, next) {
 
 router.post(
   "/login",
-  passport.authenticate("jwt", jwtLogin, {
-    successRedirect: "/login-otp",
+
+  passport.authenticate("jwt", {
+    session: false,
     failureRedirect: "/login"
   }),
-  function(req, res) {
-    res.redirect("/");
+  (req, res) => {
+    knex("users")
+      .where("id", req.user.id)
+      .select("tfa_enabled")
+      .then(loginChoice => {
+        if (loginChoice[0].tfa_enabled === true) {
+          res.json({
+            user: req.user
+            // id: req.user.id,
+            // email: req.user.email
+          });
+          // res.redirect("/login-otp"); //pass in bearer token
+        } else if (loginChoice[0].tfa_enabled === false) {
+          res.json({
+            id: req.user.id,
+            email: req.user.email
+          });
+          // res.redirect("/current"); //pass in bearer token
+        }
+      })
+      .catch(err => {
+        return err;
+      });
+
+    // res.json(req.user);
+  }
+);
+
+// example of an authenticated route-using jwt
+router.get(
+  "/current",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    res.json({
+      id: req.user.id,
+      email: req.user.email,
+      message: "User is authenticated"
+    });
   }
 );
 
 router.get(
   "/login-otp",
-  loggedin.ensureLoggedIn(),
+  // loggedin.ensureLoggedIn(),
   function(req, res, next) {
     knex
       .table("users")

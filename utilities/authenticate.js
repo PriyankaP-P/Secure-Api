@@ -11,44 +11,42 @@ options.secretOrKey = keys.secretOrKey;
 module.exports = passport => {
   let INVALID_LOGIN = "Invalid username or password";
 
-  // passport.serializeUser(function(user, done) {
-  //   done(null, user.id);
-  // });
+  passport.serializeUser(function(user, done) {
+    done(null, user.id);
+  });
 
-  // passport.deserializeUser(function(id, done) {
-  //   knex
-  //     .tables("users")
-  //     .where("id", id)
-  //     .select("id", "key")
-  //     .then(user => {
-  //       if (user.length) {
-  //         done(err, user);
-  //       }
-  //     })
-  //     .catch(err => console.log(err));
-  // });
-
+  passport.deserializeUser(function(id, done) {
+    knex
+      .tables("users")
+      .where("id", id)
+      .select("id", "key")
+      .then(user => {
+        if (user.length) {
+          done(err, user);
+        }
+      })
+      .catch(err => console.log(err));
+  });
   passport.use(
     new JwtStrategy(options, function(payload, done) {
-      process.nextTick(function() {
-        knex
-          .select("id", "email", "registered")
-          .from("users")
-          .where({ id: payload.id }) //, registered: payload.registered
-          .then(user => {
-            if (user.length) {
-              return done(null, user.id); //done?
-            }
-            return done(null, false);
-          })
-          .catch(err => {
-            console.log(err);
-            return done(null, false, { message: "Incorrect credentials." });
-          });
-        if (err) {
-          return done(err);
-        }
-      });
+      console.log(payload);
+      // process.nextTick(function() {
+      knex
+        .table("users")
+        .select("id", "email", "registered")
+        .where({ id: payload.id, registered: payload.registered })
+
+        .then(user => {
+          if (user.length) {
+            return done(null, user[0]);
+          }
+          return done(null, false);
+        })
+        .catch(err => {
+          console.log(err);
+          return done(null, false, { message: "Incorrect credentials." });
+        });
+      // });
     })
   );
 

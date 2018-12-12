@@ -1,28 +1,41 @@
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
+// const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const passport = require("passport");
+const setupPassport = require("./utilities/authenticate");
 const emailRegValidity = require("./utilities/tokenExpiry");
 const cors = require("cors");
+
 const generate = require("./generateRsa");
 const userRoutes = require("./api/routes/users");
-// const flash = require("connect-flash");
 
-// app.use(flash());
-app.use(bodyParser.urlencoded({ extended: false }));
-//when false cannot post nested objects e.g.nested obj = {person:{name: cw}}
-app.use(bodyParser.json());
-// app.use(express.session({secret:'a random secret'}));
 app.use(morgan("dev"));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+// app.use(cookieParser());
 
 // Fix cors errors
 app.use(cors());
 
-app.use(passport.initialize());
-require("./utilities/authenticate")(passport);
+// app.use(
+//   session({
+//     secret: "0_v7^^JxCcUJLGNeYf6l",
+//     name: "SessionID",
+//     resave: false,
+//     saveUninitialized: true,
+//     cookie: {
+//       // secure: true,        // Use in production. Send session cookie only over HTTPS
+//       httpOnly: true
+//     }
+//   })
+// );
 
+setupPassport(passport);
+app.use(passport.initialize());
 // app.use(passport.session());
+// app.use(passport.authenticate("remember-me"));
 
 app.use("/v1/users", userRoutes);
 
