@@ -29,6 +29,7 @@ const validateRegisterInput = require("../../validation/register");
 const validateLoginInput = require("../../validation/login");
 const validateEmail = require("../../validation/checkEmail");
 const validatePasswordChange = require("../../validation/newPassword");
+const validate2faLoginInput = require("../../validation/2fa");
 // const validateChoice = require("../../validation/enable2faChoice");
 
 router.post("/register", (req, res) => {
@@ -493,16 +494,14 @@ let authenticated = function(req, res, next) {
   return res.redirect("/");
 };
 
-//works without "loggedin.ensureLoggedIn(),"
-router.get("/setup", function(req, res, next) {
-  const { errors, isValid } = validateEmail(req.body);
-
-  if (!isValid) {
-    return res.status(400).json(errors);
-  }
-
-  knex("users") // need user id and email to be pass into req
-    .where("email", req.body.email)
+//works without "loggedin.ensureLoggedIn(),or authenticated, but needs it-fix later"
+router.get("/setup", passport.authenticate("jwt", { session: false }), function(
+  req,
+  res,
+  next
+) {
+  knex("users")
+    .where("email", req.user.email)
     .select("key", "period")
     .then(obj => {
       console.log(obj[0].key);
@@ -510,7 +509,7 @@ router.get("/setup", function(req, res, next) {
         let encodedKey = base32.encode(obj[0].key);
         let otpUrl =
           "otpauth://totp/" +
-          req.body.email +
+          req.user.email +
           "?secret=" +
           encodedKey +
           "&period=" +
@@ -520,17 +519,18 @@ router.get("/setup", function(req, res, next) {
           encodeURIComponent(otpUrl);
 
         res.json({
-          user: req.body,
+          user: req.user,
           key: encodedKey,
           qrImage: qrImage
         });
+        next(req.user);
       } else {
         let key = utils.randomKey(10);
         let encodedKey = base32.encode(key);
         console.log(encodedKey);
         let otpUrl =
           "otpauth://totp/" +
-          req.body.email +
+          req.user.email +
           "?secret=" +
           encodedKey +
           "&period=30";
@@ -540,14 +540,15 @@ router.get("/setup", function(req, res, next) {
 
         knex
           .table("users")
-          .where("email", req.body.email)
+          .where("email", req.user.email)
           .update({ key: key, period: 30, tfa_enabled: true })
           .then(result => {
             res.json({
-              user: req.body,
+              user: req.user,
               key: encodedKey,
               qrImage: qrImage
             });
+            next(req.user);
           })
           .catch(err => {
             return next(err);
@@ -587,8 +588,6 @@ router.post(
         if (loginChoice[0].tfa_enabled === true) {
           res.json({
             user: req.user
-            // id: req.user.id,
-            // email: req.user.email
           });
           // res.redirect("/login-otp"); //pass in bearer token
         } else if (loginChoice[0].tfa_enabled === false) {
@@ -602,15 +601,13 @@ router.post(
       .catch(err => {
         return err;
       });
-
-    // res.json(req.user);
   }
 );
 
 // example of an authenticated route-using jwt
 router.get(
   "/current",
-  passport.authenticate("jwt", { session: false }),
+  passport.authenticate("jwt", { session: true }),
   (req, res) => {
     res.json({
       id: req.user.id,
@@ -622,10 +619,14 @@ router.get(
 
 router.get(
   "/login-otp",
-  // loggedin.ensureLoggedIn(),
+  passport.authenticate("jwt", { session: false }),
   function(req, res, next) {
-    knex
-      .table("users")
+    const { errors, isValid } = validate2faLoginInput(req.body);
+    if (!isValid) {
+      return res.status(400).json(errors);
+    }
+
+    knex("users")
       .where("id", req.user.id)
       .select("key")
       .then(obj => {
@@ -639,27 +640,30 @@ router.get(
       });
   },
   function(req, res) {
-    res.json({ user: req.body, message: errors.message, error: errors });
+    const err = {};
+    res.json({ user: req.user, message: err.message, error: err });
   }
 );
 
 router.post(
   "/login-otp",
-  passport.authenticate("totp", {
-    failureRedirect: "/login-otp",
-    failureFlash: true
+  passport.authenticate(["jwt", "totp"], {
+    session: false,
+    failureRedirect: "/login-otp"
   }),
   function(req, res) {
-    req.session.secondFactor = "totp";
-    res.redirect("/");
+    console.log("hello");
+    res.json(req.user);
+    // req.session.secondFactor = "totp";
+    // res.redirect("/");
   }
 );
 
-function ensureSecondFactor(req, res, next) {
-  if (req.session.secondFactor == "totp") {
-    return next();
-  }
-  res.redirect("/login-otp");
-}
+// function ensureSecondFactor(req, res, next) {
+//   if (req.session.secondFactor == "totp") {
+//     return next();
+//   }
+//   res.redirect("/login-otp");
+// }
 
 module.exports = router;

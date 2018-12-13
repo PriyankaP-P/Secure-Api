@@ -1,9 +1,10 @@
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
-// const cookieParser = require("cookie-parser");
+const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const passport = require("passport");
+// const session = require("express-session");
 const setupPassport = require("./utilities/authenticate");
 const emailRegValidity = require("./utilities/tokenExpiry");
 const cors = require("cors");
@@ -14,7 +15,7 @@ const userRoutes = require("./api/routes/users");
 app.use(morgan("dev"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-// app.use(cookieParser());
+app.use(cookieParser());
 
 // Fix cors errors
 app.use(cors());
@@ -35,7 +36,6 @@ app.use(cors());
 setupPassport(passport);
 app.use(passport.initialize());
 // app.use(passport.session());
-// app.use(passport.authenticate("remember-me"));
 
 app.use("/v1/users", userRoutes);
 
