@@ -4,10 +4,10 @@ const isEmpty = require("./is-empty");
 module.exports = function validate2faLoginInput(data) {
   let errors = {};
 
-  data.key = !isEmpty(data.key) ? data.key : "";
+  data.code = !isEmpty(data.code) ? data.code : "";
 
-  if (Validator.isEmpty(data.key)) {
-    errors.key = "key is required";
+  if (Validator.isEmpty(data.code)) {
+    errors.code = "code is required";
   }
   return {
     errors,

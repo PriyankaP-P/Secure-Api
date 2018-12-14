@@ -8,9 +8,7 @@ const keys = require("../../config/keys");
 const passport = require("passport");
 const knex = require("../../knex");
 const crypto = require("crypto");
-// const speakeasy = require("speakeasy");
-// const QRCode = require("qrcode");
-
+const notp = require("notp");
 const loggedin = require("connect-ensure-login");
 const base32 = require("thirty-two");
 const utils = require("../../utilities/utils");
@@ -504,7 +502,7 @@ router.get("/setup", passport.authenticate("jwt", { session: false }), function(
     .where("email", req.user.email)
     .select("key", "period")
     .then(obj => {
-      console.log(obj[0].key);
+      // console.log(obj[0].key);
       if (obj[0].key !== null) {
         let encodedKey = base32.encode(obj[0].key);
         let otpUrl =
@@ -527,7 +525,7 @@ router.get("/setup", passport.authenticate("jwt", { session: false }), function(
       } else {
         let key = utils.randomKey(10);
         let encodedKey = base32.encode(key);
-        console.log(encodedKey);
+        console.log(key);
         let otpUrl =
           "otpauth://totp/" +
           req.user.email +
@@ -566,13 +564,6 @@ router.get("/login", jwtLogin, function(req, res) {
   res.json({ user: req.sendingToken, message: errors.message, error: errors });
 });
 
-// router.post(
-//   //passport.authenticate("jwt", { session: false }),
-//   "/login",
-//   jwtLogin,
-//   tfaLogin
-// );
-
 router.post(
   "/login",
 
@@ -587,7 +578,7 @@ router.post(
       .then(loginChoice => {
         if (loginChoice[0].tfa_enabled === true) {
           res.json({
-            user: req.user
+            user: req.user //check here for additional totp verification
           });
           // res.redirect("/login-otp"); //pass in bearer token
         } else if (loginChoice[0].tfa_enabled === false) {
@@ -620,44 +611,65 @@ router.get(
 router.get(
   "/login-otp",
   passport.authenticate("jwt", { session: false }),
-  function(req, res, next) {
+  async (req, res) => {
     const { errors, isValid } = validate2faLoginInput(req.body);
     if (!isValid) {
       return res.status(400).json(errors);
     }
 
-    knex("users")
+    // let input = req.body.code;
+    // let prepCode = input.toString().trim();
+
+    let db = await knex("users")
       .where("id", req.user.id)
-      .select("key")
+      .select("key") //check if user is active pass that instead of key
       .then(obj => {
         if (!obj) {
           return res.redirect("/setup");
         }
-        return next();
+        return obj;
       })
       .catch(err => {
+        console.log(err);
         return next(err);
       });
-  },
-  function(req, res) {
-    const err = {};
-    res.json({ user: req.user, message: err.message, error: err });
+
+    let ans = await notp.totp.verify(req.body.code, db[0].key, {});
+    console.log(ans);
+    // next();
   }
 );
 
 router.post(
   "/login-otp",
-  passport.authenticate(["jwt", "totp"], {
-    session: false,
-    failureRedirect: "/login-otp"
+  passport.authenticate(["jwt"], {
+    session: false
   }),
-  function(req, res) {
-    console.log("hello");
-    res.json(req.user);
-    // req.session.secondFactor = "totp";
-    // res.redirect("/");
+  (req, res) => {
+    const err = {};
+
+    res.json("hello");
   }
 );
+// if (req.user.length) {
+//   res.json(req.user);
+// knex("users")
+//   .where({ id: req.user.id, key: req.userKey.key })
+//   .select("key")
+//   .then(theKey => {
+//     console.log(theKey);
+//     if (!theKey) {
+//       return done(new Error("No Key"));
+//     } else {
+//       return done(null, base32.decode(theKey), 30); //30=valid key period
+//     }
+//   })
+//   .catch(err => {
+//     return err;
+//   });
+// }
+// req.session.secondFactor = "totp";
+// res.redirect("/");
 
 // function ensureSecondFactor(req, res, next) {
 //   if (req.session.secondFactor == "totp") {

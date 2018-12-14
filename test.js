@@ -22,7 +22,7 @@
 //   issuer: "Cloudgiant enterprises"
 // });
 // console.log(r);
-// const speakeasy = require("speakeasy");
+
 // const QRCode = require("qrcode");
 
 // let secret = speakeasy.generateSecret({ length: 20 });
@@ -51,9 +51,71 @@
 //   if (err) throw err;
 //   console.log(string);
 // });
-const knex = require("./knex");
-knex("users")
-  .where("id", "dcdbbb3e-9909-4e1a-8104-45768f282f5c")
-  .update("tfa_enabled", true)
-  .then(row => row)
-  .catch(err => err);
+// const knex = require("./knex");
+// knex("users")
+//   .where("id", "dcdbbb3e-9909-4e1a-8104-45768f282f5c")
+//   .update("tfa_enabled", true)
+//   .then(row => row)
+//   .catch(err => err);
+// const notp = require("notp");
+// const base32 = require("thirty-two");
+// const utils = require("./utilities/utils");
+
+// let key = utils.randomKey(10);
+// let encodedKey = base32.encode(key);
+// console.log( key);
+// console.log( encodedKey);
+// let otpUrl =
+//   "otpauth://totp/" +
+//   "priyanka.phillips18@gmail.con" +
+//   "?secret=" +
+//   encodedKey +
+//   "&period=30";
+// let qrImage =
+//   "https://chart.googleapis.com/chart?chs=166x166&chld=L|0&cht=qr&chl=" +
+//   encodeURIComponent(otpUrl);
+
+// let key = "k5f3d1wzqr";
+// let codeEntered = "133625";
+// let a = base32.decode(codeEntered);
+// // let check1 = base32.decode(codeEntered);
+
+// let check = notp.totp.verify(key, codeEntered);
+// console.log(check);
+// // console.log(qrImage);
+const notp = require("notp"),
+  base32 = require("thirty-two"),
+  K = "gnbxjbwj5s", //"12345678901234567890",
+  b32 = base32.encode(K);
+
+console.log(
+  "Click on this link to gennerate a QR code, and use Google Authenticator on your phone to read it:"
+);
+console.log(
+  "http://qrcode.kaywa.com/img.php?s=8&d=" +
+    encodeURIComponent("otpauth://totp/notp@example.com?secret=" + b32)
+);
+verify();
+
+function verify() {
+  ask("Enter a code to verify", function(code) {
+    if (notp.totp.verify(code, K, {})) {
+      console.log("Success!!!");
+    }
+    console.log(notp.totp.verify(code, K, {}));
+    verify();
+  });
+}
+
+function ask(question, callback) {
+  let stdin = process.stdin,
+    stdout = process.stdout;
+
+  stdin.resume();
+  stdout.write(question + ": ");
+
+  stdin.once("data", function(data) {
+    data = data.toString().trim();
+    callback(data);
+  });
+}
